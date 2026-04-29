@@ -73,8 +73,8 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
-    // ========== ЗАМЕНИТЕ НА ВАШ URL GOOGLE APPS SCRIPT ==========
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxnUa3Nw9dLLB8kxkDMWC_EHcJAgooWjVQHVDB1LMgUkamEFhTDZCWMmkoBlbFDom6z/exec';
+    // ========== ЗАМЕНИТЕ НА ВАШ URL ==========
+    const API_URL = 'https://script.google.com/macros/s/AKfycbw_3lsdqwXbd8ZaZLNoxevwszkyPGWsYkq9UZiJSOKtE9_3bFIvUZGlUc_SVSWt5oPe/exec';
     const ADMIN_PASSWORD = 'admin123';
 
     let products = [], cells = [], stocks = [], currentCart = [], currentRole = null,
@@ -84,7 +84,7 @@
     function escapeHtml(s) { return s ? s.replace(/[&<>]/g, m => m == '&' ? '&amp;' : m == '<' ? '&lt;' : '&gt;') : ''; }
     function escapeJsStr(s) { if (s == null) return ''; return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n'); }
 
-    // Универсальная функция для Google Sheets
+    // ========== УНИВЕРСАЛЬНАЯ ФУНКЦИЯ API (исправлено) ==========
     async function api(path, options = {}) {
         const method = options.method || 'GET';
         const body = options.body;
@@ -92,26 +92,33 @@
         const sheet = parts[0];
         const id = parts[1];
 
-        let url = API_URL + '?sheet=' + sheet;
-        if (id) url += '&id=' + id;
-        if (method !== 'GET') url += '&_method=' + method;
-
-        const fetchOptions = {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-        };
-        if (body) {
-            fetchOptions.body = body;
+        if (method === 'GET') {
+            let url = API_URL + '?sheet=' + sheet;
+            if (id) url += '&id=' + id;
+            const res = await fetch(url, { method: 'GET' });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            return data;
+        } else {
+            let payload = { sheet: sheet, _method: method };
+            if (id) payload.id = id;
+            if (body) {
+                const parsedBody = JSON.parse(body);
+                payload = { ...payload, ...parsedBody };
+            }
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            return data;
         }
-
-        const res = await fetch(url, fetchOptions);
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        return data;
     }
 
-    // Единый запрос для старта
     async function loadData() {
         try {
             const [p, c, s] = await Promise.all([
@@ -201,7 +208,7 @@
         showCellCartModal(cid);
     };
 
-    // ========== ГЛАВНЫЙ UI (без изменений) ==========
+    // ========== ГЛАВНЫЙ UI ==========
     async function renderMainUI() {
         const isAdmin = currentRole === 'admin';
         const tabs = isAdmin ? ['Остатки','Корзина','Ячейки','История','Админ'] : ['Остатки','Корзина','Ячейки','История'];
@@ -458,12 +465,11 @@
         const name = prompt('Наименование'); if (!name) return;
         const unit = prompt('Единица измерения', 'шт'); if (!unit) return;
         try {
-            const newProduct = await api('/products', {
+            await api('/products', {
                 method: 'POST',
                 body: JSON.stringify({ id: crypto.randomUUID(), sku, name, unit })
             });
-            // Google Sheets возвращает { success: true }, поэтому просто добавим в массив
-            products.push({ id: newProduct.id || crypto.randomUUID(), sku, name, unit });
+            products.push({ id: crypto.randomUUID(), sku, name, unit });
             fillStocksTable(); fillCellsGrid();
             fillAdminProducts(); fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
         } catch (err) { alert('Ошибка: ' + err.message); }
@@ -473,11 +479,11 @@
         const zone = prompt('Зона') || '';
         const desc = prompt('Описание') || '';
         try {
-            const newCell = await api('/cells', {
+            await api('/cells', {
                 method: 'POST',
                 body: JSON.stringify({ id: crypto.randomUUID(), code, zone, description: desc })
             });
-            cells.push({ id: newCell.id || crypto.randomUUID(), code, zone, description: desc });
+            cells.push({ id: crypto.randomUUID(), code, zone, description: desc });
             fillCellsGrid();
             fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
         } catch (err) { alert('Ошибка: ' + err.message); }
@@ -547,7 +553,6 @@
         if (currentCart.length === 0) { alert('Корзина пуста'); return; }
         const comment = document.getElementById('cartComment').value.trim();
         try {
-            // Сохраняем корзину в Google Sheets
             const cartId = crypto.randomUUID();
             await api('/carts', {
                 method: 'POST',
@@ -559,7 +564,6 @@
                     items: JSON.stringify(currentCart.map(i => ({ productId: i.productId, cellId: i.cellId, quantity: i.quantity })))
                 })
             });
-            // Списываем остатки (для простоты обновим каждый stock)
             for (const item of currentCart) {
                 const stock = stocks.find(s => s.product_id === item.productId && s.cell_id === item.cellId);
                 if (stock) {
