@@ -73,8 +73,8 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
-    // ========== ВАШ РАБОЧИЙ URL GOOGLE APPS SCRIPT ==========
-    const API_URL = 'https://script.google.com/macros/s/AKfycbxsjAKQgifgk1omtbsCQVb-u-SjUfwDBaTGIABi4tUzc1EdZTx0J124UMp229y7Bz4/exec';
+    // ========== ЗАМЕНИТЕ НА НОВЫЙ URL ==========
+    const API_URL = 'https://script.google.com/macros/s/AKfycby6R4T6fIAcsMyplVMI2drgFmQ54XI59Hd-HFc0_bGz-zxg5CQE_sq_RZvZ9UlsIfZN/exec';
     const ADMIN_PASSWORD = 'admin123';
 
     let products = [], cells = [], stocks = [], currentCart = [], currentRole = null,
@@ -84,10 +84,18 @@
     function escapeHtml(s) { return s ? s.replace(/[&<>]/g, m => m == '&' ? '&amp;' : m == '<' ? '&lt;' : '&gt;') : ''; }
     function escapeJsStr(s) { if (s == null) return ''; return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n'); }
 
-    // ========== УНИВЕРСАЛЬНАЯ ФУНКЦИЯ API (CORS-БЕЗОПАСНАЯ) ==========
+    // ========== ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ API ==========
     async function api(path, options = {}) {
         const method = options.method || 'GET';
         const body = options.body;
+        // Единый запрос инициализации
+        if (path === '/init' && method === 'GET') {
+            const res = await fetch(API_URL + '?sheet=init');
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            return data;
+        }
         const parts = path.replace(/^\//, '').split('/');
         const sheet = parts[0];
         const id = parts[1];
@@ -101,7 +109,6 @@
             if (data.error) throw new Error(data.error);
             return data;
         } else {
-            // Для всех изменений отправляем POST с text/plain, чтобы избежать предзапроса OPTIONS
             let payload = { sheet: sheet, _method: method };
             if (id) payload.id = id;
             if (body) {
@@ -120,16 +127,13 @@
         }
     }
 
+    // ========== Быстрая инициализация (одним запросом) ==========
     async function loadData() {
         try {
-            const [p, c, s] = await Promise.all([
-                api('/products'),
-                api('/cells'),
-                api('/stocks')
-            ]);
-            products = p;
-            cells = c;
-            stocks = s;
+            const all = await api('/init');
+            products = all.products;
+            cells = all.cells;
+            stocks = all.stocks;
             return true;
         } catch (e) {
             showError('Не удалось загрузить данные: ' + e.message);
@@ -209,7 +213,7 @@
         showCellCartModal(cid);
     };
 
-    // ========== ГЛАВНЫЙ UI ==========
+    // ========== ГЛАВНЫЙ UI (без изменений, кроме устранения двойной инициализации) ==========
     async function renderMainUI() {
         const isAdmin = currentRole === 'admin';
         const tabs = isAdmin ? ['Остатки','Корзина','Ячейки','История','Админ'] : ['Остатки','Корзина','Ячейки','История'];
@@ -269,6 +273,7 @@
         let tbody = document.getElementById('stocksBody'); if (!tbody) return;
         tbody.innerHTML = '';
         const isAdmin = currentRole === 'admin';
+        // stocks уже отфильтрованы по quantity > 0 в loadData
         let items = [];
         for (const s of stocks) {
             if (s.quantity <= 0) continue;
@@ -287,6 +292,10 @@
             const tr = document.createElement('tr');
             tr.innerHTML = `<td data-label="Товар">${escapeHtml(p.name)}</td><td data-label="Ячейка">${escapeHtml(c.code)}</td><td data-label="Кол-во">${s.quantity}</td><td data-label="Добавить">${actions}</td>`;
             tbody.appendChild(tr);
+        }
+        // Если нет ни одной записи, покажем пустую таблицу
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">Нет остатков</td></tr>';
         }
     }
 
@@ -308,7 +317,8 @@
         if (!confirm('Обнулить остаток?')) return;
         try {
             await api(`/stocks/${stockId}`, { method: 'DELETE' });
-            stocks = await api('/stocks');
+            // Локально удаляем из массива
+            stocks = stocks.filter(s => s.id !== stockId);
             fillStocksTable(); fillCellsGrid();
             if (currentRole === 'admin') { fillAdminProducts(); fillAdminCells(); fillIncomeSelects(); fillMoveSelects(); }
             alert('Остаток обнулён');
@@ -358,7 +368,7 @@
         loadMoreDiv.innerHTML = '<span class="text-muted">Загрузка...</span>';
         try {
             const carts = await api('/carts');
-            if (!Array.isArray(carts)) throw new Error('Неверный формат данных истории');
+            if (!Array.isArray(carts)) throw new Error('Неверный формат данных');
             historyAllCarts = carts;
             if (carts.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-center">История пуста</td></tr>';
@@ -384,8 +394,12 @@
     function fillAdminProducts() {
         const div = document.getElementById('adminProducts'); if (!div) return;
         div.innerHTML = '<div class="list-group">';
-        for (const p of products) {
-            div.innerHTML += `<div class="list-group-item d-flex justify-content-between align-items-center flex-wrap"><div><strong>${escapeHtml(p.sku)}</strong> - ${escapeHtml(p.name)} (${escapeHtml(p.unit)})</div><div><button class="btn btn-sm btn-primary me-1" onclick="editProduct('${p.id}')">Редакт.</button><button class="btn btn-sm btn-danger" onclick="delProduct('${p.id}')">Удалить</button></div></div>`;
+        if (products.length === 0) {
+            div.innerHTML += '<div class="list-group-item text-muted">Нет товаров</div>';
+        } else {
+            for (const p of products) {
+                div.innerHTML += `<div class="list-group-item d-flex justify-content-between align-items-center flex-wrap"><div><strong>${escapeHtml(p.sku)}</strong> - ${escapeHtml(p.name)} (${escapeHtml(p.unit)})</div><div><button class="btn btn-sm btn-primary me-1" onclick="editProduct('${p.id}')">Редакт.</button><button class="btn btn-sm btn-danger" onclick="delProduct('${p.id}')">Удалить</button></div></div>`;
+            }
         }
         div.innerHTML += '</div>';
     }
@@ -408,6 +422,7 @@
                 method: 'PUT',
                 body: JSON.stringify({ sku: newSku, name: newName, unit: newUnit })
             });
+            // Обновим локально
             const p = products.find(x => x.id === editingProductId);
             if (p) { p.sku = newSku; p.name = newName; p.unit = newUnit; }
             fillAdminProducts(); fillStocksTable(); fillCellsGrid();
@@ -418,8 +433,12 @@
     function fillAdminCells() {
         const div = document.getElementById('adminCells'); if (!div) return;
         div.innerHTML = '<div class="list-group">';
-        for (const c of cells) {
-            div.innerHTML += `<div class="list-group-item d-flex justify-content-between align-items-center flex-wrap"><div><strong>${escapeHtml(c.code)}</strong> - ${escapeHtml(c.description||'')}</div><div><button class="btn btn-sm btn-danger" onclick="delCell('${c.id}')">Удалить</button></div></div>`;
+        if (cells.length === 0) {
+            div.innerHTML += '<div class="list-group-item text-muted">Нет ячеек</div>';
+        } else {
+            for (const c of cells) {
+                div.innerHTML += `<div class="list-group-item d-flex justify-content-between align-items-center flex-wrap"><div><strong>${escapeHtml(c.code)}</strong> - ${escapeHtml(c.description||'')}</div><div><button class="btn btn-sm btn-danger" onclick="delCell('${c.id}')">Удалить</button></div></div>`;
+            }
         }
         div.innerHTML += '</div>';
     }
@@ -466,12 +485,13 @@
         const name = prompt('Наименование'); if (!name) return;
         const unit = prompt('Единица измерения', 'шт'); if (!unit) return;
         try {
+            const newId = crypto.randomUUID();
             await api('/products', {
                 method: 'POST',
-                body: JSON.stringify({ id: crypto.randomUUID(), sku, name, unit })
+                body: JSON.stringify({ id: newId, sku, name, unit })
             });
-            // локально добавим в массив, чтобы не делать лишний запрос
-            products.push({ id: crypto.randomUUID(), sku, name, unit });
+            // Локально добавляем
+            products.push({ id: newId, sku, name, unit });
             fillStocksTable(); fillCellsGrid();
             fillAdminProducts(); fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
         } catch (err) { alert('Ошибка: ' + err.message); }
@@ -481,11 +501,12 @@
         const zone = prompt('Зона') || '';
         const desc = prompt('Описание') || '';
         try {
+            const newId = crypto.randomUUID();
             await api('/cells', {
                 method: 'POST',
-                body: JSON.stringify({ id: crypto.randomUUID(), code, zone, description: desc })
+                body: JSON.stringify({ id: newId, code, zone, description: desc })
             });
-            cells.push({ id: crypto.randomUUID(), code, zone, description: desc });
+            cells.push({ id: newId, code, zone, description: desc });
             fillCellsGrid();
             fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
         } catch (err) { alert('Ошибка: ' + err.message); }
@@ -500,7 +521,13 @@
                 method: 'POST',
                 body: JSON.stringify({ id: crypto.randomUUID(), product_id: pid, cell_id: cid, quantity: qty })
             });
-            stocks = await api('/stocks');
+            // Обновим локально stocks, чтобы не ждать перезагрузки всей страницы
+            const existing = stocks.find(s => s.product_id === pid && s.cell_id === cid);
+            if (existing) {
+                existing.quantity += qty;
+            } else {
+                stocks.push({ id: crypto.randomUUID(), product_id: pid, cell_id: cid, quantity: qty });
+            }
             fillStocksTable(); fillCellsGrid();
             fillIncomeSelects(); fillMoveSelects();
             document.getElementById('incomeQty').value = '';
@@ -521,11 +548,13 @@
         try {
             if (qty === fromStock.quantity) {
                 await api(`/stocks/${fromStock.id}`, { method: 'DELETE' });
+                stocks = stocks.filter(s => s.id !== fromStock.id);
             } else {
                 await api(`/stocks/${fromStock.id}`, {
                     method: 'PUT',
                     body: JSON.stringify({ quantity: fromStock.quantity - qty })
                 });
+                fromStock.quantity -= qty;
             }
             const toStock = stocks.find(s => s.product_id === pid && s.cell_id === toId);
             if (toStock) {
@@ -533,13 +562,15 @@
                     method: 'PUT',
                     body: JSON.stringify({ quantity: toStock.quantity + qty })
                 });
+                toStock.quantity += qty;
             } else {
+                const newId = crypto.randomUUID();
                 await api('/stocks', {
                     method: 'POST',
-                    body: JSON.stringify({ id: crypto.randomUUID(), product_id: pid, cell_id: toId, quantity: qty })
+                    body: JSON.stringify({ id: newId, product_id: pid, cell_id: toId, quantity: qty })
                 });
+                stocks.push({ id: newId, product_id: pid, cell_id: toId, quantity: qty });
             }
-            stocks = await api('/stocks');
             fillStocksTable(); fillCellsGrid();
             if (currentRole === 'admin') fillMoveSelects();
             alert(`Перемещено ${qty}`);
@@ -566,17 +597,17 @@
                     items: JSON.stringify(currentCart.map(i => ({ productId: i.productId, cellId: i.cellId, quantity: i.quantity })))
                 })
             });
+            // Обновляем остатки локально после каждого списания
             for (const item of currentCart) {
                 const stock = stocks.find(s => s.product_id === item.productId && s.cell_id === item.cellId);
                 if (stock) {
                     const newQty = stock.quantity - item.quantity;
                     if (newQty <= 0) {
                         await api(`/stocks/${stock.id}`, { method: 'DELETE' });
+                        stocks = stocks.filter(s => s.id !== stock.id);
                     } else {
-                        await api(`/stocks/${stock.id}`, {
-                            method: 'PUT',
-                            body: JSON.stringify({ quantity: newQty })
-                        });
+                        await api(`/stocks/${stock.id}`, { method: 'PUT', body: JSON.stringify({ quantity: newQty }) });
+                        stock.quantity = newQty;
                     }
                 }
             }
@@ -587,7 +618,6 @@
             currentCart = [];
             document.getElementById('empName').value = '';
             document.getElementById('cartComment').value = '';
-            await loadData();
             fillStocksTable(); fillCartTable(); fillHistoryTable();
         } catch (err) { alert('Ошибка: ' + err.message); }
     }
