@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        /* … все стили из предыдущего ответа, включая спиннер … */
         * { box-sizing: border-box }
         body { background: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0; margin: 0 }
         .container { max-width: 1200px; margin: 0 auto; padding: 0 16px }
@@ -37,7 +36,6 @@
         .search-icon i { position: absolute; left: 12px; top: 10px; color: #8e8e93 }
         .qty-input { width: 70px; display: inline-block }
         .error-box { background: #ffe0e0; border-radius: 24px; padding: 20px; margin: 20px 0; color: #cc0000 }
-        /* Спиннер при загрузке */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255,255,255,0.85); display: flex; align-items: center; justify-content: center; z-index: 10000;
@@ -75,35 +73,36 @@
     </div>
 </div>
 
-<!-- Остальные модальные окна без изменений – я их тут опускаю для краткости -->
-<!-- Вставьте их точно как в прошлой рабочей версии -->
+<!-- Модальные окна -->
+<div class="modal fade" id="qrModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">QR-код ячейки</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center"><div id="qrCodeContainer"></div><p class="mt-2" id="qrLinkText"></p><button class="btn btn-primary mt-2" onclick="downloadQR()">Скачать QR</button></div></div></div></div>
+<div class="modal fade" id="cellCartModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">Товары в ячейке <span id="cellCartTitle"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="table-responsive"><table class="table table-sm" id="cellCartTable"><thead><tr><th>Товар</th><th>Артикул</th><th>Доступно</th><th>Ед.</th><th>Кол-во</th><th></th></tr></thead><tbody></tbody></table></div></div><div class="modal-footer border-0"><button class="btn btn-secondary" onclick="closeCellCartModal()">Закрыть</button><button class="btn btn-primary" onclick="goToCartFromModal()">Перейти в корзину</button></div></div></div></div>
+<div class="modal fade" id="viewCartModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">Детали корзины</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p><strong>Сотрудник:</strong> <span id="viewCartEmployee"></span></p><p><strong>Дата:</strong> <span id="viewCartDate"></span></p><p><strong>Комментарий:</strong> <span id="viewCartComment"></span></p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Товар</th><th>Ячейка</th><th>Кол-во</th></tr></thead><tbody id="viewCartItems"></tbody></table></div></div></div></div></div>
+<div class="modal fade" id="cartLinkModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">Ссылка на корзину</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="input-group"><input type="text" id="cartLinkInput" class="form-control" readonly><button class="btn btn-primary" id="copyCartLinkBtn">Копировать</button></div><div class="mt-2 small text-muted">Отправьте ссылку в Telegram</div></div></div></div></div>
+<div class="modal fade" id="editProductModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">Редактировать товар</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><input type="text" id="editSku" class="form-control mb-2" placeholder="Артикул"><input type="text" id="editName" class="form-control mb-2" placeholder="Наименование"><input type="text" id="editUnit" class="form-control" placeholder="Ед. изм."></div><div class="modal-footer border-0"><button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button><button class="btn btn-primary" id="saveEditBtn">Сохранить</button></div></div></div></div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
+    // ⚠️ ЗАМЕНИТЕ НА ВАШ АКТУАЛЬНЫЙ URL Apps Script
     const API_URL = 'https://script.google.com/macros/s/AKfycby6R4T6fIAcsMyplVMI2drgFmQ54XI59Hd-HFc0_bGz-zxg5CQE_sq_RZvZ9UlsIfZN/exec';
     const ADMIN_PASSWORD = 'admin123';
 
     let products = [], cells = [], stocks = [], currentCart = [], currentRole = null,
         currentQRCellId = null, searchQuery = '', currentTab = 0, editingProductId = null;
     let historyAllCarts = [];
-    let dataLoaded = false;
 
     function escapeHtml(s) { return s ? s.replace(/[&<>]/g, m => m == '&' ? '&amp;' : m == '<' ? '&lt;' : '&gt;') : ''; }
     function escapeJsStr(s) { if (s == null) return ''; return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n'); }
 
-    function showLoader() {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.style.display = 'flex';
-    }
-    function hideLoader() {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.style.display = 'none';
-    }
+    // Управление загрузочным оверлеем
+    function showLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'flex'; }
+    function hideLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'none'; }
 
-    // ---------- API ----------
+    // API (без кеширования)
     async function api(path, options = {}) {
         const method = options.method || 'GET';
         const body = options.body;
+        // Быстрый инит
         if (path === '/init' && method === 'GET') {
             const res = await fetch(API_URL + '?sheet=init');
             if (!res.ok) throw new Error(await res.text());
@@ -142,7 +141,7 @@
         }
     }
 
-    // Загрузка данных (без кеша, с прелоадером)
+    // Загрузка данных (без кеша, но с индикатором)
     async function loadData() {
         try {
             showLoader();
@@ -150,7 +149,6 @@
             products = all.products;
             cells = all.cells;
             stocks = all.stocks;
-            dataLoaded = true;
             hideLoader();
             return true;
         } catch (e) {
@@ -164,7 +162,7 @@
         document.getElementById('app').innerHTML = `<div class="container mt-5"><div class="error-box"><h4><i class="bi bi-exclamation-triangle"></i> Ошибка</h4><p>${escapeHtml(msg)}</p><button class="btn btn-primary" onclick="location.reload()">Попробовать снова</button></div></div>`;
     }
 
-    // ---------- QR ----------
+    // ========== QR ==========
     window.showQR = function(cellId) {
         const cell = cells.find(c => c.id === cellId);
         if (!cell) { alert('Ячейка не найдена'); return; }
@@ -185,7 +183,7 @@
         } else alert('QR не готов');
     };
 
-    // ---------- Модалка ячейки ----------
+    // ========== МОДАЛКА ЯЧЕЙКИ ==========
     window.showCellCartModal = function(cellId) {
         const cell = cells.find(c => c.id === cellId);
         if (!cell) { alert('Ячейка не найдена'); return; }
@@ -232,7 +230,7 @@
         showCellCartModal(cid);
     };
 
-    // ---------- Главный UI (все функции отрисовки оставлены без изменений) ----------
+    // ========== ГЛАВНЫЙ UI ==========
     async function renderMainUI() {
         const isAdmin = currentRole === 'admin';
         const tabs = isAdmin ? ['Остатки','Корзина','Ячейки','История','Админ'] : ['Остатки','Корзина','Ячейки','История'];
@@ -284,69 +282,378 @@
         hideLoader();
     }
 
-    // ---------- Остатки, корзина, ячейки, история (те же, что в последней рабочей версии) ----------
-    // ВАЖНО: вставьте сюда все функции fillStocksTable, fillCartTable, fillCellsGrid, fillHistoryTable,
-    // addIncome, showAddProduct, showAddCell, moveStock, submitCartForm, handleCartUrl и т.д.
-    // они точно такие же, как в предыдущем полностью рабочем коде, где всё работало.
-    // Я не могу вставить их все из-за ограничения длины сообщения, но вы можете взять их
-    // из последней версии, которая у вас работала до появления кеширования.
+    // ========== ОСТАТКИ ==========
+    function fillStocksTable() {
+        let tbody = document.getElementById('stocksBody'); if (!tbody) return;
+        tbody.innerHTML = '';
+        const isAdmin = currentRole === 'admin';
+        let items = [];
+        for (const s of stocks) {
+            if (s.quantity <= 0) continue;
+            const p = products.find(x => x.id === s.product_id);
+            const c = cells.find(x => x.id === s.cell_id);
+            if (!p || !c) continue;
+            if (searchQuery && !p.name.toLowerCase().includes(searchQuery) && !c.code.toLowerCase().includes(searchQuery)) continue;
+            items.push({ stock: s, product: p, cell: c });
+        }
+        items.sort((a,b) => a.product.name.localeCompare(b.product.name));
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center">Нет остатков</td></tr>';
+            return;
+        }
+        for (const it of items) {
+            const s = it.stock, p = it.product, c = it.cell;
+            let actions = `<input type="number" id="qty_${s.id}" class="form-control form-control-sm qty-input" min="1" step="1" value="1">
+                <button class="btn btn-sm btn-success ms-1" onclick="addToCartFromStock('${s.product_id}','${s.cell_id}','${escapeJsStr(p.name)}','${escapeJsStr(p.unit)}','${s.id}')">Добавить</button>`;
+            if (isAdmin) actions += ` <button class="btn btn-sm btn-warning ms-1" onclick="resetStock('${s.id}')">Обнулить</button>`;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td data-label="Товар">${escapeHtml(p.name)}</td><td data-label="Ячейка">${escapeHtml(c.code)}</td><td data-label="Кол-во">${s.quantity}</td><td data-label="Добавить">${actions}</td>`;
+            tbody.appendChild(tr);
+        }
+    }
 
-    // Для удобства я добавлю заглушки с комментариями – вы замените их реальными функциями.
-    function fillStocksTable() { /* … */ }
-    window.addToCartFromStock = function(pid, cid, pname, unit, sid) { /* … */ }
-    window.resetStock = async function(stockId) { /* … */ }
-    function fillCartTable() { /* … */ }
-    window.removeFromCart = function(idx) { currentCart.splice(idx,1); fillCartTable(); }
-    window.clearCart = function() { currentCart = []; fillCartTable(); }
-    window.goToCartTab = function() { let cartTab = document.querySelector('#myTab button[data-tab-index="1"]'); if (cartTab) cartTab.click(); }
-    function fillCellsGrid() { /* … */ }
-    async function fillHistoryTable() { /* … */ }
-    function fillAdminProducts() { /* … */ }
-    window.editProduct = function(id) { /* … */ }
-    function fillAdminCells() { /* … */ }
-    function fillIncomeSelects() { /* … */ }
-    function fillMoveSelects() { /* … */ }
-    window.delProduct = async function(id) { /* … */ }
-    window.delCell = async function(id) { /* … */ }
-    window.showAddProduct = async function() { /* … */ }
-    window.showAddCell = async function() { /* … */ }
-    window.addIncome = async function() { /* … */ }
-    window.moveStock = async function() { /* … */ }
-    async function submitCartForm(e) { /* … */ }
+    window.addToCartFromStock = function(pid, cid, pname, unit, sid) {
+        const input = document.getElementById(`qty_${sid}`);
+        const qty = parseInt(input.value);
+        if (isNaN(qty) || qty < 1) { alert('Количество >0'); return; }
+        const stock = stocks.find(s => s.id === sid);
+        if (!stock || stock.quantity < qty) { alert(`Недостаточно, доступно ${stock ? stock.quantity : 0}`); return; }
+        const existing = currentCart.find(i => i.productId === pid && i.cellId === cid);
+        if (existing) existing.quantity += qty;
+        else {
+            const cell = cells.find(c => c.id === cid);
+            currentCart.push({ productId: pid, cellId: cid, quantity: qty, productName: pname, cellCode: cell.code, unit });
+        }
+        input.value = '1'; fillCartTable(); alert(`Добавлено ${qty} ${unit}`);
+    };
+    window.resetStock = async function(stockId) {
+        if (!confirm('Обнулить остаток?')) return;
+        try {
+            await api(`/stocks/${stockId}`, { method: 'DELETE' });
+            stocks = stocks.filter(s => s.id !== stockId);
+            fillStocksTable(); fillCellsGrid();
+            if (currentRole === 'admin') { fillAdminProducts(); fillAdminCells(); fillIncomeSelects(); fillMoveSelects(); }
+            alert('Остаток обнулён');
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
 
-    // ---------- Роли ----------
+    // ========== КОРЗИНА ==========
+    function fillCartTable() {
+        const tbody = document.getElementById('cartBody'); if (!tbody) return;
+        tbody.innerHTML = '';
+        currentCart.forEach((item, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td data-label="Товар">${escapeHtml(item.productName)}</td><td data-label="Ячейка">${escapeHtml(item.cellCode)}</td><td data-label="Кол-во">${item.quantity}</td><td data-label="Ед">${escapeHtml(item.unit)}</td><td><button class="btn btn-sm btn-danger" onclick="removeFromCart(${idx})">X</button></td>`;
+            tbody.appendChild(tr);
+        });
+        const cnt = document.getElementById('cartCount'); if (cnt) cnt.innerText = currentCart.length;
+    }
+    window.removeFromCart = idx => { currentCart.splice(idx, 1); fillCartTable(); };
+    window.clearCart = () => { currentCart = []; fillCartTable(); };
+    window.goToCartTab = () => {
+        const cartTab = document.querySelector('#myTab button[data-tab-index="1"]');
+        if (cartTab) cartTab.click();
+    };
+
+    // ========== ЯЧЕЙКИ ==========
+    function fillCellsGrid() {
+        const grid = document.getElementById('cellsGrid'); if (!grid) return;
+        grid.innerHTML = '';
+        for (const c of cells) {
+            const cellStocks = stocks.filter(s => s.cell_id === c.id && s.quantity > 0);
+            const goods = cellStocks.map(s => {
+                const p = products.find(x => x.id === s.product_id);
+                return p ? `${escapeHtml(p.name)} (${s.quantity} ${escapeHtml(p.unit)})` : '';
+            }).join(', ');
+            const col = document.createElement('div'); col.className = 'col-md-4 mb-4';
+            col.innerHTML = `<div class="card cell-card h-100"><div class="card-body"><h5><i class="bi bi-box"></i> ${escapeHtml(c.code)}</h5><p class="text-muted">${escapeHtml(c.description||'')}</p><p><strong>Товары:</strong> ${goods||'<span class="text-muted">пусто</span>'}</p><div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-outline-primary" onclick="showCellCartModal('${c.id}')"><i class="bi bi-cart-plus"></i> Добавить</button><button class="btn btn-sm btn-outline-secondary" onclick="showQR('${c.id}')"><i class="bi bi-qr-code"></i> QR</button></div></div></div>`;
+            grid.appendChild(col);
+        }
+    }
+
+    // ========== ИСТОРИЯ ==========
+    async function fillHistoryTable() {
+        const tbody = document.querySelector('#historyTable tbody');
+        const loadMoreDiv = document.getElementById('historyLoadMore');
+        if (!tbody || !loadMoreDiv) return;
+        tbody.innerHTML = '';
+        loadMoreDiv.innerHTML = '<span class="text-muted">Загрузка...</span>';
+        try {
+            const carts = await api('/carts');
+            if (!Array.isArray(carts)) throw new Error('Неверный формат данных');
+            historyAllCarts = carts;
+            if (carts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center">История пуста</td></tr>';
+                loadMoreDiv.innerHTML = '';
+                return;
+            }
+            for (const cart of carts) {
+                let items = [];
+                try { items = JSON.parse(cart.items); } catch (e) {}
+                const link = `${location.origin}${location.pathname}?cartId=${cart.id}`;
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td data-label="Дата">${new Date(cart.date).toLocaleString()}</td><td data-label="Сотрудник">${escapeHtml(cart.employee_name)}</td><td data-label="Комментарий">${escapeHtml(cart.comment||'')}</td><td data-label="Позиций">${items.length}</td><td data-label="Ссылка"><a href="${link}" target="_blank">Открыть</a></td>`;
+                tbody.appendChild(tr);
+            }
+            loadMoreDiv.innerHTML = carts.length >= 50 ? '<span class="text-muted">Показаны последние 50 записей</span>' : '<span class="text-muted">Показаны все записи</span>';
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-danger">Ошибка загрузки: ${escapeHtml(err.message)}</td></tr>`;
+            loadMoreDiv.innerHTML = '<button class="btn btn-sm btn-outline-danger" onclick="fillHistoryTable()">Повторить</button>';
+        }
+    }
+
+    // ========== АДМИНКА (все функции) ==========
+    function fillAdminProducts() {
+        const div = document.getElementById('adminProducts'); if (!div) return;
+        div.innerHTML = '<div class="list-group">';
+        if (products.length === 0) {
+            div.innerHTML += '<div class="list-group-item text-muted">Нет товаров</div>';
+        } else {
+            for (const p of products) {
+                div.innerHTML += `<div class="list-group-item d-flex justify-content-between align-items-center flex-wrap"><div><strong>${escapeHtml(p.sku)}</strong> - ${escapeHtml(p.name)} (${escapeHtml(p.unit)})</div><div><button class="btn btn-sm btn-primary me-1" onclick="editProduct('${p.id}')">Редакт.</button><button class="btn btn-sm btn-danger" onclick="delProduct('${p.id}')">Удалить</button></div></div>`;
+            }
+        }
+        div.innerHTML += '</div>';
+    }
+    window.editProduct = function(id) {
+        const p = products.find(x => x.id === id);
+        if (!p) return;
+        editingProductId = id;
+        document.getElementById('editSku').value = p.sku;
+        document.getElementById('editName').value = p.name;
+        document.getElementById('editUnit').value = p.unit;
+        new bootstrap.Modal(document.getElementById('editProductModal')).show();
+    };
+    document.getElementById('saveEditBtn').onclick = async function() {
+        const newSku = document.getElementById('editSku').value.trim();
+        const newName = document.getElementById('editName').value.trim();
+        const newUnit = document.getElementById('editUnit').value.trim();
+        if (!newSku || !newName || !newUnit) { alert('Заполните все поля'); return; }
+        try {
+            await api(`/products/${editingProductId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ sku: newSku, name: newName, unit: newUnit })
+            });
+            const p = products.find(x => x.id === editingProductId);
+            if (p) { p.sku = newSku; p.name = newName; p.unit = newUnit; }
+            fillAdminProducts(); fillStocksTable(); fillCellsGrid();
+            bootstrap.Modal.getInstance(document.getElementById('editProductModal')).hide();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+
+    function fillAdminCells() {
+        const div = document.getElementById('adminCells'); if (!div) return;
+        div.innerHTML = '<div class="list-group">';
+        if (cells.length === 0) {
+            div.innerHTML += '<div class="list-group-item text-muted">Нет ячеек</div>';
+        } else {
+            for (const c of cells) {
+                div.innerHTML += `<div class="list-group-item d-flex justify-content-between align-items-center flex-wrap"><div><strong>${escapeHtml(c.code)}</strong> - ${escapeHtml(c.description||'')}</div><div><button class="btn btn-sm btn-danger" onclick="delCell('${c.id}')">Удалить</button></div></div>`;
+            }
+        }
+        div.innerHTML += '</div>';
+    }
+    function fillIncomeSelects() {
+        const prodSel = document.getElementById('incomeProduct'), cellSel = document.getElementById('incomeCell');
+        if (!prodSel) return;
+        prodSel.innerHTML = '<option value="">Товар</option>';
+        for (const p of products) prodSel.innerHTML += `<option value="${p.id}">${escapeHtml(p.sku)} - ${escapeHtml(p.name)}</option>`;
+        cellSel.innerHTML = '<option value="">Ячейка</option>';
+        for (const c of cells) cellSel.innerHTML += `<option value="${c.id}">${escapeHtml(c.code)}</option>`;
+    }
+    function fillMoveSelects() {
+        const prodSel = document.getElementById('moveProduct'), fromSel = document.getElementById('moveFromCell'), toSel = document.getElementById('moveToCell');
+        if (!prodSel) return;
+        prodSel.innerHTML = '<option value="">Товар</option>';
+        for (const p of products) prodSel.innerHTML += `<option value="${p.id}">${escapeHtml(p.sku)} - ${escapeHtml(p.name)}</option>`;
+        fromSel.innerHTML = '<option value="">Из ячейки</option>';
+        for (const c of cells) fromSel.innerHTML += `<option value="${c.id}">${escapeHtml(c.code)}</option>`;
+        toSel.innerHTML = '<option value="">В ячейку</option>';
+        for (const c of cells) toSel.innerHTML += `<option value="${c.id}">${escapeHtml(c.code)}</option>`;
+    }
+
+    window.delProduct = async function(id) {
+        if (!confirm('Удалить товар?')) return;
+        if (stocks.some(s => s.product_id === id && s.quantity > 0)) { alert('Есть остатки'); return; }
+        try {
+            await api(`/products/${id}`, { method: 'DELETE' });
+            products = products.filter(p => p.id !== id);
+            fillAdminProducts(); fillStocksTable(); fillCellsGrid();
+            fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.delCell = async function(id) {
+        if (!confirm('Удалить ячейку?')) return;
+        if (stocks.some(s => s.cell_id === id && s.quantity > 0)) { alert('В ячейке есть товары'); return; }
+        try {
+            await api(`/cells/${id}`, { method: 'DELETE' });
+            cells = cells.filter(c => c.id !== id);
+            fillAdminCells(); fillCellsGrid(); fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.showAddProduct = async function() {
+        const sku = prompt('Артикул'); if (!sku) return;
+        const name = prompt('Наименование'); if (!name) return;
+        const unit = prompt('Единица измерения', 'шт'); if (!unit) return;
+        try {
+            const newId = crypto.randomUUID();
+            await api('/products', { method: 'POST', body: JSON.stringify({ id: newId, sku, name, unit }) });
+            products.push({ id: newId, sku, name, unit });
+            fillStocksTable(); fillCellsGrid();
+            fillAdminProducts(); fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.showAddCell = async function() {
+        const code = prompt('Код ячейки'); if (!code) return;
+        const zone = prompt('Зона') || ''; const desc = prompt('Описание') || '';
+        try {
+            const newId = crypto.randomUUID();
+            await api('/cells', { method: 'POST', body: JSON.stringify({ id: newId, code, zone, description: desc }) });
+            cells.push({ id: newId, code, zone, description: desc });
+            fillCellsGrid();
+            fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.addIncome = async function() {
+        const pid = document.getElementById('incomeProduct').value;
+        const cid = document.getElementById('incomeCell').value;
+        const qty = parseInt(document.getElementById('incomeQty').value);
+        if (!pid || !cid || !qty) { alert('Заполните поля'); return; }
+        try {
+            await api('/stocks', { method: 'POST', body: JSON.stringify({ id: crypto.randomUUID(), product_id: pid, cell_id: cid, quantity: qty }) });
+            const existing = stocks.find(s => s.product_id === pid && s.cell_id === cid);
+            if (existing) existing.quantity += qty;
+            else stocks.push({ id: crypto.randomUUID(), product_id: pid, cell_id: cid, quantity: qty });
+            fillStocksTable(); fillCellsGrid();
+            fillIncomeSelects(); fillMoveSelects();
+            document.getElementById('incomeQty').value = ''; alert('Приход проведён');
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.moveStock = async function() {
+        const pid = document.getElementById('moveProduct').value;
+        const fromId = document.getElementById('moveFromCell').value;
+        const toId = document.getElementById('moveToCell').value;
+        let qty = parseInt(document.getElementById('moveQuantity').value);
+        if (!pid || !fromId || !toId) { alert('Выберите товар и ячейки'); return; }
+        if (fromId === toId) { alert('Ячейки должны быть разными'); return; }
+        const fromStock = stocks.find(s => s.product_id === pid && s.cell_id === fromId);
+        if (!fromStock || fromStock.quantity <= 0) { alert('В исходной ячейке нет товара'); return; }
+        if (isNaN(qty) || qty <= 0) qty = fromStock.quantity;
+        if (qty > fromStock.quantity) { alert(`Недостаточно, доступно ${fromStock.quantity}`); return; }
+        try {
+            if (qty === fromStock.quantity) {
+                await api(`/stocks/${fromStock.id}`, { method: 'DELETE' });
+                stocks = stocks.filter(s => s.id !== fromStock.id);
+            } else {
+                await api(`/stocks/${fromStock.id}`, { method: 'PUT', body: JSON.stringify({ quantity: fromStock.quantity - qty }) });
+                fromStock.quantity -= qty;
+            }
+            const toStock = stocks.find(s => s.product_id === pid && s.cell_id === toId);
+            if (toStock) {
+                await api(`/stocks/${toStock.id}`, { method: 'PUT', body: JSON.stringify({ quantity: toStock.quantity + qty }) });
+                toStock.quantity += qty;
+            } else {
+                const newId = crypto.randomUUID();
+                await api('/stocks', { method: 'POST', body: JSON.stringify({ id: newId, product_id: pid, cell_id: toId, quantity: qty }) });
+                stocks.push({ id: newId, product_id: pid, cell_id: toId, quantity: qty });
+            }
+            fillStocksTable(); fillCellsGrid();
+            if (currentRole === 'admin') fillMoveSelects();
+            alert(`Перемещено ${qty}`);
+            document.getElementById('moveQuantity').value = '';
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+
+    // ========== ОФОРМЛЕНИЕ КОРЗИНЫ ==========
+    async function submitCartForm(e) {
+        e.preventDefault();
+        const emp = document.getElementById('empName').value.trim();
+        if (!emp) { alert('Введите фамилию'); return; }
+        if (currentCart.length === 0) { alert('Корзина пуста'); return; }
+        const comment = document.getElementById('cartComment').value.trim();
+        try {
+            const cartId = crypto.randomUUID();
+            await api('/carts', { method: 'POST', body: JSON.stringify({
+                id: cartId, date: new Date().toISOString(), employee_name: emp, comment,
+                items: JSON.stringify(currentCart.map(i => ({ productId: i.productId, cellId: i.cellId, quantity: i.quantity })))
+            }) });
+            for (const item of currentCart) {
+                const stock = stocks.find(s => s.product_id === item.productId && s.cell_id === item.cellId);
+                if (stock) {
+                    const newQty = stock.quantity - item.quantity;
+                    if (newQty <= 0) {
+                        await api(`/stocks/${stock.id}`, { method: 'DELETE' });
+                        stocks = stocks.filter(s => s.id !== stock.id);
+                    } else {
+                        await api(`/stocks/${stock.id}`, { method: 'PUT', body: JSON.stringify({ quantity: newQty }) });
+                        stock.quantity = newQty;
+                    }
+                }
+            }
+            const cartLink = `${location.origin}${location.pathname}?cartId=${cartId}`;
+            document.getElementById('cartLinkInput').value = cartLink;
+            new bootstrap.Modal(document.getElementById('cartLinkModal')).show();
+            alert('Корзина оформлена!');
+            currentCart = [];
+            document.getElementById('empName').value = '';
+            document.getElementById('cartComment').value = '';
+            fillStocksTable(); fillCartTable(); fillHistoryTable();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    }
+
+    document.addEventListener('click', (e) => {
+        if (e.target.id == 'copyCartLinkBtn') {
+            const inp = document.getElementById('cartLinkInput');
+            inp.select();
+            navigator.clipboard.writeText(inp.value).then(() => alert('Скопировано')).catch(() => alert('Ошибка'));
+        }
+    });
+
+    async function handleCartUrl() {
+        const params = new URLSearchParams(location.search);
+        const cartId = params.get('cartId');
+        if (!cartId) return;
+        const cart = historyAllCarts.find(c => c.id === cartId);
+        if (!cart) { alert('Корзина не найдена'); return; }
+        document.getElementById('viewCartEmployee').innerText = cart.employee_name;
+        document.getElementById('viewCartDate').innerText = new Date(cart.date).toLocaleString();
+        document.getElementById('viewCartComment').innerText = cart.comment || '';
+        let items = [];
+        try { items = JSON.parse(cart.items); } catch(e) {}
+        const tbody = document.getElementById('viewCartItems');
+        tbody.innerHTML = '';
+        for (const it of items) {
+            const prod = products.find(p => p.id === it.productId);
+            const cell = cells.find(c => c.id === it.cellId);
+            tbody.innerHTML += `<tr><td>${prod ? escapeHtml(prod.name) : '?'}</td><td>${cell ? escapeHtml(cell.code) : '?'}</td><td>${it.quantity}</td></tr>`;
+        }
+        new bootstrap.Modal(document.getElementById('viewCartModal')).show();
+        const url = new URL(location.href);
+        url.searchParams.delete('cartId');
+        window.history.replaceState({}, document.title, url.pathname + url.hash);
+    }
+
     function showRoleSelector() {
         currentRole = null;
         localStorage.removeItem('role');
         hideLoader();
         document.getElementById('app').innerHTML = `<div class="container"><div class="role-selector text-center"><div class="card"><div class="card-header bg-transparent"><h3>Склад SEVENCOM</h3></div><div class="card-body"><div class="d-grid gap-3"><button id="empLoginBtn" class="btn btn-primary btn-lg">Войти как сотрудник</button><button id="adminLoginBtn" class="btn btn-outline-secondary btn-lg">Войти как администратор</button></div></div></div></div></div>`;
         document.getElementById('empLoginBtn').onclick = async () => {
-            currentRole = 'employee';
-            localStorage.setItem('role', 'employee');
-            if (await loadData()) {
-                await renderMainUI();
-                handleCellIdFromUrl();
-            }
+            currentRole = 'employee'; localStorage.setItem('role', 'employee');
+            if (await loadData()) { await renderMainUI(); handleCellIdFromUrl(); }
         };
         document.getElementById('adminLoginBtn').onclick = async () => {
             let pwd = prompt('Пароль:');
             if (pwd === ADMIN_PASSWORD) {
-                currentRole = 'admin';
-                localStorage.setItem('role', 'admin');
-                if (await loadData()) {
-                    await renderMainUI();
-                    handleCellIdFromUrl();
-                }
+                currentRole = 'admin'; localStorage.setItem('role', 'admin');
+                if (await loadData()) { await renderMainUI(); handleCellIdFromUrl(); }
             } else if (pwd) alert('Неверный пароль');
         };
     }
 
     function logout() {
         localStorage.removeItem('role');
-        currentRole = null;
-        currentCart = [];
-        searchQuery = '';
-        currentTab = 0;
+        currentRole = null; currentCart = []; searchQuery = ''; currentTab = 0;
         showRoleSelector();
     }
 
@@ -354,8 +661,7 @@
         const params = new URLSearchParams(location.search);
         const cellId = params.get('cellId');
         if (!cellId) return;
-        const url = new URL(location.href);
-        url.searchParams.delete('cellId');
+        const url = new URL(location.href); url.searchParams.delete('cellId');
         window.history.replaceState({}, document.title, url.pathname + url.hash);
         if (cells.length && products.length && stocks.length) {
             showCellCartModal(cellId);
