@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        /* ... стили без изменений (те же, что в предыдущем ответе) ... */
         * { box-sizing: border-box }
         body { background: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 0; margin: 0 }
         .container { max-width: 1200px; margin: 0 auto; padding: 0 16px }
@@ -39,8 +38,30 @@
         .error-box { background: #ffe0e0; border-radius: 24px; padding: 20px; margin: 20px 0; color: #cc0000 }
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.9); display: flex; align-items: center; justify-content: center; z-index: 10000;
+            background: rgba(255,255,255,0.92); display: flex; align-items: center; justify-content: center; z-index: 10000;
         }
+        @media (max-width: 768px) {
+            .navbar h3 { font-size: 1.2rem }
+            .card-header { font-size: 1rem; padding: 0.8rem 1rem }
+            .btn-sm { padding: 3px 10px }
+            .nav-tabs .nav-link { padding: 4px 12px; font-size: 0.8rem }
+            #stocksTable, #stocksTable thead, #stocksTable tbody, #stocksTable tr, #stocksTable td, #stocksTable th { display: block }
+            #stocksTable thead { display: none }
+            #stocksTable tr { margin-bottom: 16px; border-radius: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 12px }
+            #stocksTable td { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border: none; border-bottom: 1px solid #e9ecef }
+            #stocksTable td:last-child { border-bottom: none }
+            #stocksTable td:before { content: attr(data-label); font-weight: 600; width: 40%; color: #6c757d }
+            #historyTable, #historyTable thead, #historyTable tbody, #historyTable tr, #historyTable td, #historyTable th { display: block }
+            #historyTable thead { display: none }
+            #historyTable tr { margin-bottom: 16px; border-radius: 20px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); padding: 12px }
+            #historyTable td { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border: none; border-bottom: 1px solid #e9ecef }
+            #historyTable td:last-child { border-bottom: none }
+            #historyTable td:before { content: attr(data-label); font-weight: 600; width: 40%; color: #6c757d }
+            .list-group-item { flex-direction: column; align-items: flex-start!important }
+            .list-group-item .btn { margin-left: 0; margin-right: 8px; margin-top: 8px }
+        }
+        .list-group-item { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap }
+        @media (max-width: 768px) { .list-group-item { flex-direction: column; align-items: flex-start } }
     </style>
 </head>
 <body>
@@ -62,7 +83,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
-    const API_URL = 'https://script.google.com/macros/s/AKfycby6R4T6fIAcsMyplVMI2drgFmQ54XI59Hd-HFc0_bGz-zxg5CQE_sq_RZvZ9UlsIfZN/exec'; // ← замените на новый URL после деплоя Apps Script
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxXd81BgmRc4CT2kV-X37dqLf7uZnYTVpsaGZo26jLFB4E_fE0w7fOCBzPIqebr2f5L/exec'; // ← замените на новый URL после деплоя Apps Script
     const ADMIN_PASSWORD = 'admin123';
     const CACHE_KEY = 'sklad_cache';
     const ROLE_KEY = 'sklad_role';
@@ -75,7 +96,13 @@
     function escapeJsStr(s) { if (s == null) return ''; return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n'); }
 
     function showLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'flex'; }
-    function hideLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'none'; }
+    function hideLoader() {
+        const o = document.getElementById('loading-overlay');
+        if (o) {
+            // Минимальная задержка, чтобы спиннер был заметен
+            setTimeout(() => { o.style.display = 'none'; }, 200);
+        }
+    }
 
     // API
     async function api(path, options = {}) {
@@ -318,6 +345,7 @@
         input.value = '1'; fillCartTable(); alert(`Добавлено ${qty} ${unit}`);
     };
     window.resetStock = async function(stockId) {
+        if (!stockId) { alert('Ошибка: не указан идентификатор позиции'); return; }
         if (!confirm('Обнулить остаток?')) return;
         showLoader();
         try {
@@ -506,7 +534,6 @@
         showLoader();
         try {
             await api('/stocks', { method: 'POST', body: JSON.stringify({ product_id: pid, cell_id: cid, quantity: qty }) });
-            // Локальное обновление
             const existing = stocks.find(s => s.product_id === pid && s.cell_id === cid);
             if (existing) existing.quantity += qty;
             else stocks.push({ id: crypto.randomUUID(), product_id: pid, cell_id: cid, quantity: qty });
@@ -618,6 +645,7 @@
                 cart = await api(`/carts/${cartId}`);
                 if (!cart || cart.error) throw new Error(cart?.error || 'Не найдена');
             } catch (e) {
+                hideLoader();
                 alert('Корзина не найдена');
                 const url = new URL(location.href); url.searchParams.delete('cartId');
                 window.history.replaceState({}, document.title, url.pathname + url.hash);
@@ -678,7 +706,6 @@
         }
     }
 
-    // Автовход при наличии роли
     async function autoLogin() {
         const savedRole = localStorage.getItem(ROLE_KEY);
         if (savedRole === 'employee' || savedRole === 'admin') {
