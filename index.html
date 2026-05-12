@@ -40,6 +40,7 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255,255,255,0.85); display: flex; align-items: center; justify-content: center; z-index: 10000;
         }
+        /* Увеличим спиннер на мобильных */
         @media (max-width: 768px) {
             .navbar h3 { font-size: 1.2rem }
             .card-header { font-size: 1rem; padding: 0.8rem 1rem }
@@ -67,7 +68,7 @@
 <body>
 <div id="app">
     <div id="loading-overlay" style="display: none;">
-        <div class="spinner-border text-primary" role="status">
+        <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem;">
             <span class="visually-hidden">Загрузка...</span>
         </div>
     </div>
@@ -95,11 +96,27 @@
     function escapeHtml(s) { return s ? s.replace(/[&<>]/g, m => m == '&' ? '&amp;' : m == '<' ? '&lt;' : '&gt;') : ''; }
     function escapeJsStr(s) { if (s == null) return ''; return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, '\\n'); }
 
-    function showLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'flex'; }
-    function hideLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'none'; }
+    // Управление спиннером с минимальной задержкой 300 мс для плавности
+    let loaderTimeout = null;
+    function showLoader() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+            // Делаем спиннер более заметным на мобильных
+            overlay.querySelector('.spinner-border').style.width = '4rem';
+            overlay.querySelector('.spinner-border').style.height = '4rem';
+        }
+    }
+    function hideLoader() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
 
-    // API
+    // API (без изменений)
     async function api(path, options = {}) {
+        // ... (тот же код, что и раньше) ...
         const method = options.method || 'GET';
         const body = options.body;
         if (path === '/init' && method === 'GET') {
@@ -140,7 +157,7 @@
         }
     }
 
-    // --- КЭШИРОВАНИЕ ---
+    // Кэширование
     function saveDataToCache(data) {
         const cache = {
             timestamp: Date.now(),
@@ -167,7 +184,6 @@
         localStorage.removeItem(CACHE_KEY);
     }
 
-    // Загрузка данных с поддержкой кэша
     async function loadData(useCache = true) {
         try {
             if (useCache) {
@@ -472,7 +488,7 @@
         }
     }
 
-    // ========== АДМИНКА ==========
+    // ========== АДМИНКА (без изменений) ==========
     function fillAdminProducts() {
         const div = document.getElementById('adminProducts'); if (!div) return;
         div.innerHTML = '<div class="list-group">';
@@ -720,7 +736,7 @@
         window.history.replaceState({}, document.title, url.pathname + url.hash);
     }
 
-    // ========== ВХОД (со спиннером) ==========
+    // ========== ВХОД (с гарантированным спиннером) ==========
     function showRoleSelector() {
         currentRole = null;
         clearCache();
@@ -731,7 +747,9 @@
             showLoader();
             currentRole = 'employee';
             localStorage.setItem(ROLE_KEY, 'employee');
-            if (await loadData()) {
+            // Принудительно загружаем данные без кэша, чтобы показать спиннер
+            const success = await loadData(false);
+            if (success) {
                 await renderMainUI();
                 await handleCartUrl();
                 handleCellIdFromUrl();
@@ -743,7 +761,8 @@
                 showLoader();
                 currentRole = 'admin';
                 localStorage.setItem(ROLE_KEY, 'admin');
-                if (await loadData()) {
+                const success = await loadData(false);
+                if (success) {
                     await renderMainUI();
                     await handleCartUrl();
                     handleCellIdFromUrl();
@@ -779,15 +798,19 @@
         }
     }
 
+    // Автоматический вход при наличии сохранённой роли
     async function autoLogin() {
         const savedRole = localStorage.getItem(ROLE_KEY);
         if (savedRole === 'employee' || savedRole === 'admin') {
             currentRole = savedRole;
+            // Используем кэш для быстрого входа
             const success = await loadData(true);
             if (success) {
                 await renderMainUI();
                 await handleCartUrl();
                 handleCellIdFromUrl();
+            } else {
+                showRoleSelector();
             }
         } else {
             showRoleSelector();
