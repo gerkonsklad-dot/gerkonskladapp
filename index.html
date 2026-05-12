@@ -66,14 +66,14 @@
 </head>
 <body>
 <div id="app">
-    <div id="loading-overlay">
+    <div id="loading-overlay" style="display: none;">
         <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Загрузка...</span>
         </div>
     </div>
 </div>
 
-<!-- Модальные окна оставлены без изменений -->
+<!-- Модальные окна (без изменений) -->
 <div class="modal fade" id="qrModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">QR-код ячейки</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body text-center"><div id="qrCodeContainer"></div><p class="mt-2" id="qrLinkText"></p><button class="btn btn-primary mt-2" onclick="downloadQR()">Скачать QR</button></div></div></div></div>
 <div class="modal fade" id="cellCartModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">Товары в ячейке <span id="cellCartTitle"></span></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="table-responsive"><table class="table table-sm" id="cellCartTable"><thead><tr><th>Товар</th><th>Артикул</th><th>Доступно</th><th>Ед.</th><th>Кол-во</th><th></th></tr></thead><tbody></tbody></table></div></div><div class="modal-footer border-0"><button class="btn btn-secondary" onclick="closeCellCartModal()">Закрыть</button><button class="btn btn-primary" onclick="goToCartFromModal()">Перейти в корзину</button></div></div></div></div>
 <div class="modal fade" id="viewCartModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content" style="border-radius:44px"><div class="modal-header border-0"><h5 class="modal-title">Детали корзины</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p><strong>Сотрудник:</strong> <span id="viewCartEmployee"></span></p><p><strong>Дата:</strong> <span id="viewCartDate"></span></p><p><strong>Комментарий:</strong> <span id="viewCartComment"></span></p><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Товар</th><th>Ячейка</th><th>Кол-во</th></tr></thead><tbody id="viewCartItems"></tbody></table></div></div></div></div></div>
@@ -83,7 +83,6 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function(){
-    // ⚠️ ЗАМЕНИТЕ НА ВАШ РАБОЧИЙ URL Apps Script
     const API_URL = 'https://script.google.com/macros/s/AKfycby6R4T6fIAcsMyplVMI2drgFmQ54XI59Hd-HFc0_bGz-zxg5CQE_sq_RZvZ9UlsIfZN/exec';
     const ADMIN_PASSWORD = 'admin123';
     const CACHE_KEY = 'sklad_cache';
@@ -99,7 +98,7 @@
     function showLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'flex'; }
     function hideLoader() { const o = document.getElementById('loading-overlay'); if (o) o.style.display = 'none'; }
 
-    // API (без изменений)
+    // API
     async function api(path, options = {}) {
         const method = options.method || 'GET';
         const body = options.body;
@@ -141,7 +140,7 @@
         }
     }
 
-    // --- КЭШИРОВАНИЕ ДАННЫХ ДЛЯ БЫСТРОГО ВХОДА ---
+    // --- КЭШИРОВАНИЕ ---
     function saveDataToCache(data) {
         const cache = {
             timestamp: Date.now(),
@@ -157,7 +156,6 @@
         if (!raw) return null;
         try {
             const cache = JSON.parse(raw);
-            // Используем кэш не старше 30 минут
             if (Date.now() - cache.timestamp < 30 * 60 * 1000) {
                 return cache;
             }
@@ -169,23 +167,21 @@
         localStorage.removeItem(CACHE_KEY);
     }
 
-    // Загрузка данных с поддержкой кэша (сначала кэш, потом сеть)
+    // Загрузка данных с поддержкой кэша
     async function loadData(useCache = true) {
         try {
-            // Если разрешён кэш и есть свежие данные, сразу возвращаем их
             if (useCache) {
                 const cached = loadDataFromCache();
                 if (cached) {
                     products = cached.products;
                     cells = cached.cells;
                     stocks = cached.stocks;
-                    // Запускаем фоновое обновление без ожидания
+                    // Фоновое обновление
                     api('/init').then(data => {
                         products = data.products;
                         cells = data.cells;
                         stocks = data.stocks;
                         saveDataToCache(data);
-                        // После фонового обновления можно обновить отображение
                         if (document.getElementById('stocksBody')) {
                             fillStocksTable();
                             fillCellsGrid();
@@ -200,7 +196,6 @@
                     return true;
                 }
             }
-            // Кэш не используется или пуст – загружаем с сервера с прелоадером
             showLoader();
             const data = await api('/init');
             products = data.products;
@@ -477,7 +472,7 @@
         }
     }
 
-    // ========== АДМИНКА (функции без изменений) ==========
+    // ========== АДМИНКА ==========
     function fillAdminProducts() {
         const div = document.getElementById('adminProducts'); if (!div) return;
         div.innerHTML = '<div class="list-group">';
@@ -547,20 +542,106 @@
         for (const c of cells) toSel.innerHTML += `<option value="${c.id}">${escapeHtml(c.code)}</option>`;
     }
 
-    window.delProduct = async function(id) { /* ... без изменений ... */ };
-    window.delCell = async function(id) { /* ... без изменений ... */ };
-    window.showAddProduct = async function() { /* ... без изменений ... */ };
-    window.showAddCell = async function() { /* ... без изменений ... */ };
-    window.addIncome = async function() { /* ... без изменений ... */ };
-    window.moveStock = async function() { /* ... без изменений ... */ };
+    window.delProduct = async function(id) {
+        if (!confirm('Удалить товар?')) return;
+        if (stocks.some(s => s.product_id === id && s.quantity > 0)) { alert('Есть остатки'); return; }
+        try {
+            await api(`/products/${id}`, { method: 'DELETE' });
+            products = products.filter(p => p.id !== id);
+            fillAdminProducts(); fillStocksTable(); fillCellsGrid();
+            fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.delCell = async function(id) {
+        if (!confirm('Удалить ячейку?')) return;
+        if (stocks.some(s => s.cell_id === id && s.quantity > 0)) { alert('В ячейке есть товары'); return; }
+        try {
+            await api(`/cells/${id}`, { method: 'DELETE' });
+            cells = cells.filter(c => c.id !== id);
+            fillAdminCells(); fillCellsGrid(); fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.showAddProduct = async function() {
+        const sku = prompt('Артикул'); if (!sku) return;
+        const name = prompt('Наименование'); if (!name) return;
+        const unit = prompt('Единица измерения', 'шт'); if (!unit) return;
+        try {
+            const newId = crypto.randomUUID();
+            await api('/products', { method: 'POST', body: JSON.stringify({ id: newId, sku, name, unit }) });
+            products.push({ id: newId, sku, name, unit });
+            fillStocksTable(); fillCellsGrid();
+            fillAdminProducts(); fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.showAddCell = async function() {
+        const code = prompt('Код ячейки'); if (!code) return;
+        const zone = prompt('Зона') || ''; const desc = prompt('Описание') || '';
+        try {
+            const newId = crypto.randomUUID();
+            await api('/cells', { method: 'POST', body: JSON.stringify({ id: newId, code, zone, description: desc }) });
+            cells.push({ id: newId, code, zone, description: desc });
+            fillCellsGrid();
+            fillAdminCells(); fillIncomeSelects(); fillMoveSelects();
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.addIncome = async function() {
+        const pid = document.getElementById('incomeProduct').value;
+        const cid = document.getElementById('incomeCell').value;
+        const qty = parseInt(document.getElementById('incomeQty').value);
+        if (!pid || !cid || !qty) { alert('Заполните поля'); return; }
+        try {
+            await api('/stocks', { method: 'POST', body: JSON.stringify({ id: crypto.randomUUID(), product_id: pid, cell_id: cid, quantity: qty }) });
+            const existing = stocks.find(s => s.product_id === pid && s.cell_id === cid);
+            if (existing) existing.quantity += qty;
+            else stocks.push({ id: crypto.randomUUID(), product_id: pid, cell_id: cid, quantity: qty });
+            fillStocksTable(); fillCellsGrid();
+            fillIncomeSelects(); fillMoveSelects();
+            document.getElementById('incomeQty').value = ''; alert('Приход проведён');
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
+    window.moveStock = async function() {
+        const pid = document.getElementById('moveProduct').value;
+        const fromId = document.getElementById('moveFromCell').value;
+        const toId = document.getElementById('moveToCell').value;
+        let qty = parseInt(document.getElementById('moveQuantity').value);
+        if (!pid || !fromId || !toId) { alert('Выберите товар и ячейки'); return; }
+        if (fromId === toId) { alert('Ячейки должны быть разными'); return; }
+        const fromStock = stocks.find(s => s.product_id === pid && s.cell_id === fromId);
+        if (!fromStock || fromStock.quantity <= 0) { alert('В исходной ячейке нет товара'); return; }
+        if (isNaN(qty) || qty <= 0) qty = fromStock.quantity;
+        if (qty > fromStock.quantity) { alert(`Недостаточно, доступно ${fromStock.quantity}`); return; }
+        try {
+            if (qty === fromStock.quantity) {
+                await api(`/stocks/${fromStock.id}`, { method: 'DELETE' });
+                stocks = stocks.filter(s => s.id !== fromStock.id);
+            } else {
+                await api(`/stocks/${fromStock.id}`, { method: 'PUT', body: JSON.stringify({ quantity: fromStock.quantity - qty }) });
+                fromStock.quantity -= qty;
+            }
+            const toStock = stocks.find(s => s.product_id === pid && s.cell_id === toId);
+            if (toStock) {
+                await api(`/stocks/${toStock.id}`, { method: 'PUT', body: JSON.stringify({ quantity: toStock.quantity + qty }) });
+                toStock.quantity += qty;
+            } else {
+                const newId = crypto.randomUUID();
+                await api('/stocks', { method: 'POST', body: JSON.stringify({ id: newId, product_id: pid, cell_id: toId, quantity: qty }) });
+                stocks.push({ id: newId, product_id: pid, cell_id: toId, quantity: qty });
+            }
+            fillStocksTable(); fillCellsGrid();
+            if (currentRole === 'admin') fillMoveSelects();
+            alert(`Перемещено ${qty}`);
+            document.getElementById('moveQuantity').value = '';
+        } catch (err) { alert('Ошибка: ' + err.message); }
+    };
 
-    // ========== ОФОРМЛЕНИЕ КОРЗИНЫ ==========
+    // ========== ОФОРМЛЕНИЕ КОРЗИНЫ (со спиннером) ==========
     async function submitCartForm(e) {
         e.preventDefault();
         const emp = document.getElementById('empName').value.trim();
         if (!emp) { alert('Введите фамилию'); return; }
         if (currentCart.length === 0) { alert('Корзина пуста'); return; }
         const comment = document.getElementById('cartComment').value.trim();
+        showLoader();
         try {
             const cartId = crypto.randomUUID();
             await api('/carts', { method: 'POST', body: JSON.stringify({
@@ -587,10 +668,10 @@
             currentCart = [];
             document.getElementById('empName').value = '';
             document.getElementById('cartComment').value = '';
-            // Инвалидируем кэш, так как данные изменились
             clearCache();
             fillStocksTable(); fillCartTable(); fillHistoryTable();
         } catch (err) { alert('Ошибка: ' + err.message); }
+        finally { hideLoader(); }
     }
 
     document.addEventListener('click', (e) => {
@@ -601,7 +682,7 @@
         }
     });
 
-    // ========== ПРОСМОТР КОРЗИНЫ ПО ССЫЛКЕ ==========
+    // ========== ПРОСМОТР КОРЗИНЫ ==========
     async function handleCartUrl() {
         const params = new URLSearchParams(location.search);
         const cartId = params.get('cartId');
@@ -639,7 +720,7 @@
         window.history.replaceState({}, document.title, url.pathname + url.hash);
     }
 
-    // ========== ВХОД (ЗАПОМИНАНИЕ РОЛИ, БЫСТРЫЙ СТАРТ) ==========
+    // ========== ВХОД (со спиннером) ==========
     function showRoleSelector() {
         currentRole = null;
         clearCache();
@@ -647,6 +728,7 @@
         hideLoader();
         document.getElementById('app').innerHTML = `<div class="container"><div class="role-selector text-center"><div class="card"><div class="card-header bg-transparent"><h3>Склад SEVENCOM</h3></div><div class="card-body"><div class="d-grid gap-3"><button id="empLoginBtn" class="btn btn-primary btn-lg">Войти как сотрудник</button><button id="adminLoginBtn" class="btn btn-outline-secondary btn-lg">Войти как администратор</button></div></div></div></div></div>`;
         document.getElementById('empLoginBtn').onclick = async () => {
+            showLoader();
             currentRole = 'employee';
             localStorage.setItem(ROLE_KEY, 'employee');
             if (await loadData()) {
@@ -658,6 +740,7 @@
         document.getElementById('adminLoginBtn').onclick = async () => {
             let pwd = prompt('Пароль:');
             if (pwd === ADMIN_PASSWORD) {
+                showLoader();
                 currentRole = 'admin';
                 localStorage.setItem(ROLE_KEY, 'admin');
                 if (await loadData()) {
@@ -696,20 +779,15 @@
         }
     }
 
-    // Автоматический вход, если роль сохранена
     async function autoLogin() {
         const savedRole = localStorage.getItem(ROLE_KEY);
         if (savedRole === 'employee' || savedRole === 'admin') {
             currentRole = savedRole;
-            // Попытка загрузить данные (сначала кэш, потом сеть)
             const success = await loadData(true);
             if (success) {
                 await renderMainUI();
                 await handleCartUrl();
                 handleCellIdFromUrl();
-            } else {
-                // Если данные не загрузились, показываем ошибку (не сбрасываем роль)
-                // Можно ничего не делать, страница ошибки уже показана
             }
         } else {
             showRoleSelector();
